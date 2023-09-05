@@ -354,34 +354,41 @@ class YunRun:
 
 
 if __name__ == '__main__':
-    logo = '''  _    _         _  ____                 _                          
- | |  | |       (_)|  _ \               | |                         
- | |__| |  __ _  _ | |_) |  ___    ___  | |      __ _  _ __    __ _ 
- |  __  | / _` || ||  _ <  / _ \  / _ \ | |     / _` || '_ \  / _` |
- | |  | || (_| || || |_) || (_) || (_) || |____| (_| || | | || (_| |
- |_|  |_| \__,_||_||____/  \___/  \___/ |______|\__,_||_| |_| \__, |
-                                                               __/ |
-                                                              |___/ '''
-    # colors = [
-    #     '\033[31m',  # 红色
-    #     '\033[33m',  # 黄色
-    #     '\033[32m',  # 绿色
-    #     '\033[36m',  # 青色
-    #     '\033[34m',  # 蓝色
-    #     '\033[35m',  # 紫色
-    # ]
-    #
-    # for i, line in enumerate(logo.split('\n')):
-    #     print(colors[i % len(colors)] + line)
-    #     time.sleep(0.1)
+    try:
+        logo = '''  
+     _    _         _  ____                 _                          
+    | |  | |       (_)|  _ \               | |                         
+    | |__| |  __ _  _ | |_) |  ___    ___  | |      __ _  _ __    __ _ 
+    |  __  | / _` || ||  _ <  / _ \  / _ \ | |     / _` || '_ \  / _` |
+    | |  | || (_| || || |_) || (_) || (_) || |____| (_| || | | || (_| |
+    |_|  |_| \__,_||_||____/  \___/  \___/ |______|\__,_||_| |_| \__, |
+                                                                  __/ |
+                                                                  |___/ '''
+        # colors = [
+        #     '\033[31m',  # 红色
+        #     '\033[33m',  # 黄色
+        #     '\033[32m',  # 绿色
+        #     '\033[36m',  # 青色
+        #     '\033[34m',  # 蓝色
+        #     '\033[35m',  # 紫色
+        # ]
+        #
+        # for i, line in enumerate(logo.split('\n')):
+        #     print(colors[i % len(colors)] + line)
+        #     time.sleep(0.1)
 
-    print(logo)
+        print(logo)
 
-    print('项目开源免费禁止商业用途，仓库地址：https://github.com/HaiBooLang/AHNUYunRun')
-    user_name = input('请输入用户名：')
-    user_password = input('请输入用户密码：')
-    map_key = input('请输入高德地图API：')
-    yunrun = YunRun(user_name, user_password, map_key)
-    yunrun.run()
+        print('项目开源免费禁止商业用途，仓库地址：https://github.com/HaiBooLang/AHNUYunRun')
+        user_name = input('请输入用户名：')
+        user_password = input('请输入用户密码：')
+        map_key = input('请输入高德地图API：')
+        yunrun = YunRun(user_name, user_password, map_key)
+        yunrun.run()
+    except Exception as e:
+        print(e)
+        print('发生错误，请截图并在 GitHub 上提出 issue')
+        time.sleep(100)
 
-    # pyinstaller --onefile --add-binary="%PYTHON_HOME%\DLLs\*.dll;." yunrun.py
+
+    # pyinstaller --onefile --add-binary="%PYTHON_HOME%\DLLs\*.dll;." --icon=yunrun.ico yunrun.py
