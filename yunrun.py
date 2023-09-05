@@ -26,6 +26,8 @@ class YunRun:
 
     __split_count = 10
 
+    __point_shifting = 0.000008
+
     def __init__(self, user_name, user_password):
         try:
             self.__logger = logging.getLogger(user_name)
@@ -227,7 +229,10 @@ class YunRun:
                 d_y = (b_y - a_y) / YunRun.__split_count
                 for j in range(0, YunRun.__split_count):
                     new_split_point.append({
-                        'point': str(a_x + (j + 1) * d_x) + ',' + str(a_y + (j + 1) * d_y),
+                        'point': str(a_x + (
+                                    j + 1) * d_x + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2) + ',' + str(
+                            a_y + (
+                                        j + 1) * d_y + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2),
                         'runStatus': '1',
                         'speed': format(
                             random.uniform(getattr(self, 'raSingleMileageMin'), getattr(self, 'raSingleMileageMax')),
