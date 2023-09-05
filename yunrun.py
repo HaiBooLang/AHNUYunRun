@@ -3,12 +3,10 @@ import hashlib
 import json
 import logging
 import random
-import threading
 import time
 import requests
 from pyDes import des, PAD_PKCS5, CBC
-from apscheduler.schedulers.blocking import BlockingScheduler
-import gc
+from colorama import init, Fore, Back, Style
 
 
 class YunRun:
@@ -16,7 +14,6 @@ class YunRun:
     __school_host = 'http://47.99.163.239:8080'
     __app_edition = '2.3.1'
     __system_edition = '12'
-    __map_key = ''
     __cipher = 'YUNZHIEE'
     __initialization_vector = '\1\2\3\4\5\6\7\x08'
 
@@ -28,24 +25,15 @@ class YunRun:
 
     __point_shifting = 0.000008
 
-    def __init__(self, user_name, user_password):
+    def __init__(self, user_name, user_password, map_key):
         try:
-            self.__logger = logging.getLogger(user_name)
-            self.__logger.setLevel(logging.INFO)
-
-            file_handler = logging.FileHandler('yunrun.log')
-            file_handler.setLevel(logging.INFO)
-
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(funcName)s - %(message)s')
-            file_handler.setFormatter(formatter)
-
-            self.__logger.addHandler(file_handler)
-
             self.__user_name = user_name
             self.__user_password = user_password
 
             self.__device_name = self.__get_device_name()
             self.__device_id = self.__get_device_id()
+
+            self.__map_key = map_key
 
             self.__user_token = ''
             self.__now_distance = 0
@@ -53,7 +41,7 @@ class YunRun:
             self.__manage_list = []
 
         except Exception as e:
-            self.__logger.error(f'发生了错误：{e}', exc_info=True)
+            print(f'发生了错误：{e}', exc_info=True)
 
     def run(self):
         try:
@@ -63,7 +51,7 @@ class YunRun:
             self.__finish_run()
             self.__sign_out()
         except Exception as e:
-            self.__logger.error(f'发生了错误：{e}', exc_info=True)
+            print(f'发生了错误：{e}', exc_info=True)
 
     def __prepare_run(self):
         self.__user_token = self.__sign_in()
@@ -73,7 +61,7 @@ class YunRun:
         while (self.__now_distance / 1000 > getattr(self,
                                                     'raSingleMileageMin') + YunRun.__allow_overflow_distance) or self.__now_distance == 0:
             i += 1
-            self.__logger.info('第' + str(i) + '次尝试...')
+            print('第' + str(i) + '次尝试...')
             self.__manage_list = []
             self.__now_distance = 0
             self.__now_time = 0
@@ -83,7 +71,7 @@ class YunRun:
             self.__generate_task(getattr(self, 'points'))
         self.__now_time = int(random.uniform(getattr(self, 'raPaceMin'), getattr(self, 'raPaceMax')) * 60 * (
                 self.__now_distance / 1000))
-        self.__logger.info(
+        print(
             '打卡点标记完成！本次将打卡' + str(self.__myLikes) + '个点，处理' + str(len(self.__task_list)) + '个点，总计'
             + format(self.__now_distance / 1000, '.2f')
             + '公里，将耗时' + str(self.__now_time // 60) + '分' + str(self.__now_time % 60) + '秒')
@@ -120,7 +108,7 @@ class YunRun:
                 'crsRunRecordId': j['data']['id'],
                 'userName': j['data']['studentId'],
             })
-            self.__logger.info("云运动任务创建成功！")
+            print("云运动任务创建成功！")
 
     def __split(self, points):
         data = {
@@ -138,20 +126,20 @@ class YunRun:
         response = requests.post(url=f'{YunRun.__school_host}/run/splitPoints',
                                  data=YunRun.__des_encrypt(json.dumps(data)),
                                  headers=headers)
-        self.__logger.info(f'{response}')
+        print(f'{response}')
 
     def __running(self):
         sleep_time = self.__now_time / (self.__task_count + 1)
-        self.__logger.info('等待' + format(sleep_time, '.2f') + '秒...')
+        print('等待' + format(sleep_time, '.2f') + '秒...')
         time.sleep(sleep_time)
         for task_index, task in enumerate(self.__task_list):
-            self.__logger.info('开始处理第' + str(task_index + 1) + '个点...')
+            print('开始处理第' + str(task_index + 1) + '个点...')
             for split_index, split in enumerate(task['points']):
                 self.__split(split)
-                self.__logger.info(
+                print(
                     '  第' + str(split_index + 1) + '次splitPoint发送成功！等待' + format(sleep_time, '.2f') + '秒...')
                 time.sleep(sleep_time)
-            self.__logger.info('第' + str(task_index + 1) + '个点处理完毕！')
+            print('第' + str(task_index + 1) + '个点处理完毕！')
 
     def __generate_task(self, points):
         random_points = random.sample(points, getattr(self, 'raDislikes'))
@@ -173,7 +161,7 @@ class YunRun:
                 })
 
         if self.__now_distance / 1000 < getattr(self, 'raSingleMileageMin'):
-            self.__logger.info('公里数不足' + str(getattr(self, 'raSingleMileageMin')) + '公里，将自动回跑...')
+            print('公里数不足' + str(getattr(self, 'raSingleMileageMin')) + '公里，将自动回跑...')
             index = 0
             while self.__now_distance / 1000 < getattr(self, 'raSingleMileageMin'):
                 self.__add_task(self.__manage_list[index]['point'])
@@ -185,7 +173,7 @@ class YunRun:
         else:
             origin = self.__task_list[-1]['originPoint']
         data = {
-            'key': YunRun.__map_key,
+            'key': self.__map_key,
             'origin': origin,
             'destination': point
         }
@@ -230,9 +218,9 @@ class YunRun:
                 for j in range(0, YunRun.__split_count):
                     new_split_point.append({
                         'point': str(a_x + (
-                                    j + 1) * d_x + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2) + ',' + str(
+                                j + 1) * d_x + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2) + ',' + str(
                             a_y + (
-                                        j + 1) * d_y + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2),
+                                    j + 1) * d_y + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2),
                         'runStatus': '1',
                         'speed': format(
                             random.uniform(getattr(self, 'raSingleMileageMin'), getattr(self, 'raSingleMileageMax')),
@@ -250,7 +238,7 @@ class YunRun:
         })
 
     def __finish_run(self) -> None:
-        self.__logger.info('发送结束信号...')
+        print('发送结束信号...')
         data = {
             'recordMileage': format(self.__now_distance / 1000, '.2f'),
             'recodeCadence': self.__get_cadence(),
@@ -270,7 +258,7 @@ class YunRun:
             'manageList': self.__manage_list
         }
         response = self.__get_response("/run/finish", json.dumps(data))
-        self.__logger.info(response)
+        print(response)
 
     def __get_response(self, router: str, data: str) -> str:
         headers = {
@@ -312,17 +300,17 @@ class YunRun:
         data = json.loads(response.text)
 
         if data['code'] == 200:
-            self.__logger.info("登录成功")
+            print("登录成功")
             return data['data']['token']
         else:
-            self.__logger.info(data['msg'])
+            print(data['msg'])
             return ''
 
     def __sign_out(self):
         data = json.loads(self.__get_response("/login/signOut", ""))
 
         if data['code'] == 200:
-            self.__logger.info("退出登录成功")
+            print("退出登录成功")
 
     def __get_cadence(self) -> str:
         shifting = int((getattr(self, 'raCadenceMax') - getattr(self, 'raCadenceMin')) / 10)
@@ -365,25 +353,35 @@ class YunRun:
             return 'Xiaomi'
 
 
-def task():
-    with open('users.json', 'r') as f:
-        yunruns = [YunRun(user['user_name'], user['user_password']) for user in json.load(f)]
-
-    threads = []
-    for i, yunrun in enumerate(yunruns):
-        thread = threading.Thread(target=yunrun.run)
-        threads.append(thread)
-        thread.start()
-        if i < len(yunruns) - 1:
-            time.sleep(60 * 100 / len(yunruns) + random.random(0, 1) * 2 - 1)
-
-    for thread in threads:
-        thread.join()
-
-    gc.collect()
-
-
 if __name__ == '__main__':
-    scheduler = BlockingScheduler()
-    scheduler.add_job(task, 'cron', hour=6, minute=1)
-    scheduler.start()
+    logo = '''  _    _         _  ____                 _                          
+ | |  | |       (_)|  _ \               | |                         
+ | |__| |  __ _  _ | |_) |  ___    ___  | |      __ _  _ __    __ _ 
+ |  __  | / _` || ||  _ <  / _ \  / _ \ | |     / _` || '_ \  / _` |
+ | |  | || (_| || || |_) || (_) || (_) || |____| (_| || | | || (_| |
+ |_|  |_| \__,_||_||____/  \___/  \___/ |______|\__,_||_| |_| \__, |
+                                                               __/ |
+                                                              |___/ '''
+    # colors = [
+    #     '\033[31m',  # 红色
+    #     '\033[33m',  # 黄色
+    #     '\033[32m',  # 绿色
+    #     '\033[36m',  # 青色
+    #     '\033[34m',  # 蓝色
+    #     '\033[35m',  # 紫色
+    # ]
+    #
+    # for i, line in enumerate(logo.split('\n')):
+    #     print(colors[i % len(colors)] + line)
+    #     time.sleep(0.1)
+
+    print(logo)
+
+    print('项目开源免费禁止商业用途，仓库地址：https://github.com/HaiBooLang/AHNUYunRun')
+    user_name = input('请输入用户名：')
+    user_password = input('请输入用户密码：')
+    map_key = input('请输入高德地图API：')
+    yunrun = YunRun(user_name, user_password, map_key)
+    yunrun.run()
+
+    # pyinstaller --onefile --add-binary="%PYTHON_HOME%\DLLs\*.dll;." yunrun.py
