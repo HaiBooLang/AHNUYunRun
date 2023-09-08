@@ -1,12 +1,13 @@
 import base64
 import hashlib
 import json
-import logging
+import math
 import random
 import time
+import traceback
 import requests
 from pyDes import des, PAD_PKCS5, CBC
-from colorama import init, Fore, Back, Style
+# from colorama import init, Fore, Back, Style
 
 
 class YunRun:
@@ -23,35 +24,31 @@ class YunRun:
 
     __split_count = 10
 
-    __point_shifting = 0.000008
+    __point_shifting = 0.00001
+
+    __min_cadence = 44
+    __max_cadence = 222
 
     def __init__(self, user_name, user_password, map_key):
-        try:
-            self.__user_name = user_name
-            self.__user_password = user_password
+        self.__user_name = user_name
+        self.__user_password = user_password
 
-            self.__device_name = self.__get_device_name()
-            self.__device_id = self.__get_device_id()
+        self.__device_name = self.__get_device_name()
+        self.__device_id = self.__get_device_id()
 
-            self.__map_key = map_key
+        self.__map_key = map_key
 
-            self.__user_token = ''
-            self.__now_distance = 0
-            self.__now_time = 0
-            self.__manage_list = []
-
-        except Exception as e:
-            print(f'发生了错误：{e}', exc_info=True)
+        self.__user_token = ''
+        self.__now_distance = 0
+        self.__now_time = 0
+        self.__manage_list = []
 
     def run(self):
-        try:
-            self.__prepare_run()
-            self.__start_run()
-            self.__running()
-            self.__finish_run()
-            self.__sign_out()
-        except Exception as e:
-            print(f'发生了错误：{e}', exc_info=True)
+        self.__prepare_run()
+        self.__start_run()
+        self.__running()
+        self.__finish_run()
+        self.__sign_out()
 
     def __prepare_run(self):
         self.__user_token = self.__sign_in()
@@ -113,7 +110,7 @@ class YunRun:
     def __split(self, points):
         data = {
             'cardPointList': points,
-            'crsRunRecordId': getattr(self, 'recordStartTime'),
+            'crsRunRecordId': getattr(self, 'crsRunRecordId'),
             'schoolId': YunRun.__school_id,
             'userName': self.__user_name
         }
@@ -167,6 +164,10 @@ class YunRun:
                 self.__add_task(self.__manage_list[index]['point'])
                 index = (index + 1) % getattr(self, 'raDislikes')
 
+    @staticmethod
+    def __get_shifting():
+        return YunRun.__point_shifting * random.random() - YunRun.__point_shifting / 2
+
     def __add_task(self, point):
         if not self.__task_list:
             origin = YunRun.__get_start_point()
@@ -187,9 +188,9 @@ class YunRun:
             for step in path['steps']:
                 polyline = step['polyline']
                 points = polyline.split(';')
-                for p in points:
+                for point in points:
                     split_point.append({
-                        'point': p,
+                        'point': point,
                         'runStatus': '1',
                         'speed': format(
                             random.uniform(getattr(self, 'raSingleMileageMin'), getattr(self, 'raSingleMileageMax')),
@@ -203,30 +204,42 @@ class YunRun:
 
         if len(split_point) > 1:
             b = split_point[0]['point']
+
             for i in range(1, len(split_point)):
                 new_split_point = []
                 a = b
                 b = split_point[i]['point']
+
                 a_split = a.split(',')
                 b_split = b.split(',')
+
                 a_x = float(a_split[0])
                 a_y = float(a_split[1])
                 b_x = float(b_split[0])
                 b_y = float(b_split[1])
+
+                if a_x - b_x != 0:
+                    tan = (a_y - b_y) / (a_x - b_x)
+                else:
+                    tan = 1
+
                 d_x = (b_x - a_x) / YunRun.__split_count
                 d_y = (b_y - a_y) / YunRun.__split_count
+
                 for j in range(0, YunRun.__split_count):
+                    new_split_point_x = str(
+                        a_x + (j + 1) * d_x + math.sqrt(YunRun.__get_shifting() ** 2 / (1 + tan ** 2)) * tan)
+                    new_split_point_y = str(
+                        a_y + (j + 1) * d_y + math.sqrt(YunRun.__get_shifting() ** 2 / (1 + tan ** 2)))
                     new_split_point.append({
-                        'point': str(a_x + (
-                                j + 1) * d_x + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2) + ',' + str(
-                            a_y + (
-                                    j + 1) * d_y + random.random() * YunRun.__point_shifting - YunRun.__point_shifting / 2),
+                        'point': new_split_point_x + ',' + new_split_point_y,
                         'runStatus': '1',
                         'speed': format(
                             random.uniform(getattr(self, 'raSingleMileageMin'), getattr(self, 'raSingleMileageMax')),
                             '.2f'),
                         'isFence': 'Y'
                     })
+
                 split_points.append(new_split_point)
                 self.__task_count = self.__task_count + 1
         elif len(split_point) == 1:
@@ -239,10 +252,11 @@ class YunRun:
 
     def __finish_run(self) -> None:
         print('发送结束信号...')
+        pace = self.__now_time / 60 / (self.__now_distance / 1000)
         data = {
             'recordMileage': format(self.__now_distance / 1000, '.2f'),
-            'recodeCadence': self.__get_cadence(),
-            'recodePace': format(self.__now_time / 60 / (self.__now_distance / 1000), '.2f'),
+            'recodeCadence': self.__get_cadence(pace),
+            'recodePace': format(pace, '.2f'),
             'deviceName': self.__device_name,
             'sysEdition': YunRun.__system_edition,
             'appEdition': YunRun.__app_edition,
@@ -312,14 +326,15 @@ class YunRun:
         if data['code'] == 200:
             print("退出登录成功")
 
-    def __get_cadence(self) -> str:
-        shifting = int((getattr(self, 'raCadenceMax') - getattr(self, 'raCadenceMin')) / 10)
-        max_value = getattr(self, 'raCadenceMax') - shifting
-        min_value = getattr(self, 'raCadenceMin') + shifting
+    def __get_cadence(self, pace) -> str:
         hash_value = hashlib.sha256(self.__user_name.encode()).hexdigest()
-        x = int(hash_value, 16) % 1000
-        y = x / 1000 * (max_value - min_value) + min_value
-        return str(int(max(min(y + random.randint(-shifting, shifting), max_value), min_value)))
+        height = int(hash_value, 16) % 1000 / 1000 * (2 - 1.5) + 1.5
+
+        speed = 1000 / (pace * 60)
+        step_length = 0.45 * height
+        cadence = speed / step_length * 60
+
+        return str(int(max(min(cadence, YunRun.__max_cadence), YunRun.__min_cadence)))
 
     def __get_device_id(self, length: int = 16) -> str:
         combined_str = self.__user_name + self.__user_password
@@ -342,9 +357,14 @@ class YunRun:
 
     @staticmethod
     def __get_start_point() -> str:
-        latitude = random.uniform(118.375059, 118.377209)
-        longitude = random.uniform(31.279333, 31.287604)
-        return f'{latitude},{longitude}'
+        if random.randint(0, 3) == 2:
+            latitude = random.uniform(118.379848, 118.380406)
+            longitude = random.uniform(31.282419, 31.288902)
+            return f'{latitude},{longitude}'
+        else:
+            latitude = random.uniform(118.375059, 118.377209)
+            longitude = random.uniform(31.277624, 31.287604)
+            return f'{latitude},{longitude}'
 
     def __get_device_name(self) -> str:
         if int(self.__user_name) % 3 == 0:
@@ -380,15 +400,16 @@ if __name__ == '__main__':
         print(logo)
 
         print('项目开源免费禁止商业用途，仓库地址：https://github.com/HaiBooLang/AHNUYunRun')
+        print('程序版本：v0.0.1 | 程序发布日期：2023-09-08')
         user_name = input('请输入用户名：')
         user_password = input('请输入用户密码：')
         map_key = input('请输入高德地图API：')
+
         yunrun = YunRun(user_name, user_password, map_key)
         yunrun.run()
     except Exception as e:
-        print(e)
+        traceback.print_exc()
         print('发生错误，请截图并在 GitHub 上提出 issue')
         time.sleep(100)
-
 
     # pyinstaller --onefile --add-binary="%PYTHON_HOME%\DLLs\*.dll;." --icon=yunrun.ico yunrun.py
